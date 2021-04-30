@@ -28,7 +28,7 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
     uint256 public constant inviteSelfReward = 5;//质押自奖励，5%
     uint256 public constant invite1Reward = 15;//1级邀请奖励，15%
     uint256 public constant invite2Reward = 10;//2级邀请奖励，10%
-    uint256 public constant rewardPerBlock = 267094;//区块奖励
+    //uint256 public constant rewardPerBlock = 267094;//区块奖励
     uint256 public rewardTotal = 0;//总挖矿奖励
 
     constructor (ITokenYou _you, YouswapInviteV1 _invite) {
@@ -96,9 +96,6 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
         if (0 < _amount) {
             UserInfo storage userInfo = pledgeUserInfo[_pool][msg.sender];
             require(_amount <= userInfo.amount, ErrorCode.BALANCE_INSUFFICIENT);
-            IERC20(poolInfo.lp).safeTransfer(msg.sender, _amount);
-
-            emit UnStake(_pool, poolInfo.lp, msg.sender, _amount);
         }
 
         (address _upper1, address _upper2) = invite.inviteUpper2(msg.sender);
@@ -112,6 +109,12 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
         }
 
         setRewardDebt(_pool, poolInfo.rewardPerShare, msg.sender, _upper1, _upper2);
+
+        if (0 < _amount) {
+            IERC20(poolInfo.lp).safeTransfer(msg.sender, _amount);
+
+            emit UnStake(_pool, poolInfo.lp, msg.sender, _amount);
+        }
     }
 
     function poolPledgeAddresss(uint256 _pool) override external view returns (address[] memory) {
@@ -191,7 +194,11 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
     function subPower(uint256 _pool, address _user, uint256 _amount, address _upper1, address _upper2) internal {
         PoolInfo storage poolInfo = poolInfos[_pool];
         UserInfo storage userInfo = pledgeUserInfo[_pool][_user];
-        poolInfo.amount = poolInfo.amount.sub(_amount);
+        if (poolInfo.amount < _amount) {
+            poolInfo.amount = 0;
+        }else {
+            poolInfo.amount = poolInfo.amount.sub(_amount);
+        }
 
         uint256 pledgePower = _amount;
         userInfo.amount = userInfo.amount.sub(_amount);
@@ -203,9 +210,9 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
         if (poolInfo.totalPower < pledgePower) {
             poolInfo.totalPower = 0;
         }else {
-            poolInfo.totalPower = poolInfo.totalPower.sub(pledgePower);
+            poolInfo.totalPower = poolInfo.totalPower.sub(pledgePower);    
         }
-
+        
         uint256 upper1InvitePower = 0;
         uint256 upper2InvitePower = 0;
 
@@ -234,7 +241,7 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
                 if (poolInfo.totalPower < invite1Power) {
                     poolInfo.totalPower = 0;
                 }else {
-                    poolInfo.totalPower = poolInfo.totalPower.sub(invite1Power);                    
+                    poolInfo.totalPower = poolInfo.totalPower.sub(invite1Power);
                 }
 
                 if (address(0) != _upper2) {
@@ -423,7 +430,7 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
 
     ////////////////////////////////////////////////////////////////////////////////////
 
-    function addPool(string memory _name, address _lp, uint256 _startBlock, uint256 _rewardTotal) override external returns (bool) {
+    function addPool(string memory _name, address _lp, uint256 _startBlock, uint256 _rewardTotal, uint256 _rewardPerBlock, uint256 _multiple) override external returns (bool) {
         require(operateOwner[msg.sender] && (address(0) != _lp) && (address(this) != _lp), ErrorCode.FORBIDDEN);
         _startBlock = _startBlock < block.number ? block.number : _startBlock;
         uint256 _pool = poolCount;
@@ -432,8 +439,8 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
         PoolViewInfo storage poolViewInfo = poolViewInfos[_pool];
         poolViewInfo.lp = _lp;
         poolViewInfo.name = _name;
-        poolViewInfo.multiple = 1;
-        poolViewInfo.priority = _pool.mul(100);
+        poolViewInfo.multiple = _multiple;
+        poolViewInfo.priority = _pool.mul(100).add(50);
         
         PoolInfo storage poolInfo = poolInfos[_pool];
         poolInfo.startBlock = _startBlock;
@@ -442,7 +449,7 @@ contract YouswapFactoryV1 is IYouswapFactoryV1 {
         poolInfo.lp = _lp;
         poolInfo.amount = 0;
         poolInfo.lastRewardBlock = _startBlock.sub(1);
-        poolInfo.rewardPerBlock = rewardPerBlock;
+        poolInfo.rewardPerBlock = _rewardPerBlock;
         poolInfo.totalPower = 0;
         poolInfo.endBlock = 0;
         poolInfo.rewardPerShare = 0;

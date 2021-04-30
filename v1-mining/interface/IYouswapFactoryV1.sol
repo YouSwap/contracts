@@ -211,7 +211,7 @@ interface IYouswapFactoryV1 {
     /**
     新建矿池
      */
-    function addPool(string memory, address, uint256, uint256) external returns (bool);
+    function addPool(string memory, address, uint256, uint256, uint256, uint256) external returns (bool);
         
     /**
     修改矿池区块奖励
